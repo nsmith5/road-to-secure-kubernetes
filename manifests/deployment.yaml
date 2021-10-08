@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: road-to-secure-kubernetes
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: road-to-secure-kubernetes
+  template:
+    metadata:
+      labels:
+        app: road-to-secure-kubernetes
+    spec:
+      containers:
+      - name: road-to-secure-kubernetes
+        image: nsmith5/road-to-secure-kubernetes:1
+        env:
+        - name: REDIS_ADDR
+          value: redis:6379
+        - name: REDIS_PASSWD
+          valueFrom:
+            secretKeyRef:
+              name: redis
+              key: password
+        ports:
+        - containerPort: 8080
+

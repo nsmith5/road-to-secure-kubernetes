@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: road-to-secure-kubernetes
+spec:
+  type: ClusterIP
+  selector:
+    app: road-to-secure-kubernetes
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
