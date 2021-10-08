@@ -12,9 +12,13 @@ spec:
       labels:
         app: road-to-secure-kubernetes
     spec:
+      securityContext:
+        runAsGroup: 4444
+        runAsUser: 1234
+        runAsNonRoot: true
       containers:
       - name: road-to-secure-kubernetes
-        image: nsmith5/road-to-secure-kubernetes:1
+        image: nsmith5/road-to-secure-kubernetes:2
         env:
         - name: REDIS_ADDR
           value: redis:6379
