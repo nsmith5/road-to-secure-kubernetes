@@ -16,6 +16,8 @@ spec:
       containers:
       - name: redis
         image: redis:latest
+        securityContext:
+          readOnlyRootFilesystem: true
         args:
         - "/usr/local/bin/redis-server"
         - "--appendonly"

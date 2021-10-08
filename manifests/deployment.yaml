@@ -19,6 +19,8 @@ spec:
       containers:
       - name: road-to-secure-kubernetes
         image: nsmith5/road-to-secure-kubernetes:2
+        securityContext:
+          readOnlyRootFilesystem: true
         env:
         - name: REDIS_ADDR
           value: redis:6379
