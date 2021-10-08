@@ -1,5 +1,5 @@
 # Road to Secure Kubernetes
-_Hardening a containerized application on step at a time_
+_Hardening a containerized application one step at a time_
 
 🎉 Ahoy! Welcome to 1.0! Our container application is ready for release.
 Our app is a simple webserver that counts the number of requests it has seen.
