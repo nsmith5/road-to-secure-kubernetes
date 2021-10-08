@@ -1,7 +1,7 @@
 # Road to Secure Kubernetes
 _Hardening a containerized application on step at a time_
 
-í¾ Ahoy! Welcome to 1.0! Our container application is ready for release.
+🎉 Ahoy! Welcome to 1.0! Our container application is ready for release.
 Our app is a simple webserver that counts the number of requests it has seen.
 To deploy the app simply run
 
@@ -32,7 +32,7 @@ The Kubernetes manifests can all be found in the `manifests` directory.
 
 ## Scary stuff
 
-Unfortuntately our application has some security vulnerabilities í¸±. There
+Unfortuntately our application has some security vulnerabilities 😱. There
 seems to be a remote code execution.
 
 ```
