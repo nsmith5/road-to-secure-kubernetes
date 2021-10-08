@@ -1,15 +1,11 @@
-FROM ubuntu
-WORKDIR /app
-RUN apt-get update
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates openssl golang
+FROM golang:1.16 as build
+WORKDIR /build
 COPY . .
 RUN go get
-RUN go build
+RUN CGO_ENABLED=0 go build
+RUN chgrp 0 road-to-secure-kubernetes && chmod g+X road-to-secure-kubernetes
 
-# Make application runnable by any user (Openshift compatible)
-RUN chgrp -R 0 . && chmod -R g+rwX .
-
-# Switch to arbitrary UID
+FROM scratch
+COPY --from=build /build/road-to-secure-kubernetes .
 USER 5678
-
-CMD ["./road-to-secure-kubernetes"]
+ENTRYPOINT ["/road-to-secure-kubernetes"]

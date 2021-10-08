@@ -18,7 +18,7 @@ spec:
         runAsNonRoot: true
       containers:
       - name: road-to-secure-kubernetes
-        image: nsmith5/road-to-secure-kubernetes:2
+        image: nsmith5/road-to-secure-kubernetes:5
         securityContext:
           readOnlyRootFilesystem: true
         env:

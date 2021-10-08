@@ -1,146 +1,72 @@
 # Road to Secure Kubernetes
 _Hardening a containerized application one step at a time_
 
-Welcome to 4.0! We've beefed up our network security _significantly_
+Welcome to 5.0! In this step we've hardened the web container by removing
+almost _everything_ from it.
 
 ## What has changed?
 
-We've added network policies now to lock down networking in our namespace.
+We've modified the Dockerfile for our web server significantly.
 
-> Aside: we've also organized the manifests in folders so run `kubectl apply -R
-> -f manifests` to update now
+```Dockerfile
+FROM golang:1.16 as build
+WORKDIR /build
+COPY . .
+RUN go get
+RUN CGO_ENABLED=0 go build
+RUN chgrp 0 road-to-secure-kubernetes && chmod g+X road-to-secure-kubernetes
 
-At this point only the following traffic is allowed inside the `default`
-namespace is the following:
-
-| Source            | Destination      | Reason                            |
-|:------------------|:-----------------|:----------------------------------|
-| Nginx ingress pod | Web server :8080 | Load balance HTTP requests        |
-| Web server        | Core DNS :53     | DNS Lookup for Redis service      |
-| Web server        | Redis :6379      | Redis connection for count lookup |
-
-This is acheived with three network policies. The first blocks all ingress
-and egress traffic by default in the `default` namespace.
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-all
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
+FROM scratch
+COPY --from=build /build/road-to-secure-kubernetes .
+USER 5678
+ENTRYPOINT ["/road-to-secure-kubernetes"]
 ```
 
-The second allows the Nginx ingress to web server and the DNS egress and Redis egress.
+Lets highlight a few things:
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: road-to-secure-kubernetes
-spec:
-  podSelector:
-    matchLabels:
-      app: road-to-secure-kubernetes
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: ingress-nginx
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/component: controller
-          app.kubernetes.io/name: ingress-nginx
-    ports:
-    - protocol: TCP
-      port: 8080
-  egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: redis
-    ports:
-    - protocol: TCP
-      port: 6379
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-    - podSelector:
-        matchLabels:
-          k8s-app: kube-dns
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
-```
+- `FROM golang:1.16 as build` shows we're using a multistage build. The first
+stage is simply used to build the binary and the second stage is how the final
+container is constructed. The binary is copied from the first stage into the second
+- `CGO_ENABLED=0 go build` By turning off CGO, the resulting binary is completely
+statically linked with zero dependency on glibc etc.
+- `RUN chgrp 0` and `chmod g+X` has the same affect as before: The binary can now
+be executed by any user ID.
+- `FROM scratch` this final container starts as _completely_ empty
 
-Finally, the third allows ingress from the web server to Redis.
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: redis
-spec:
-  podSelector:
-    matchLabels:
-      app: redis
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: road-to-secure-kubernetes
-    ports:
-    - protocol: TCP
-      port: 6379
-```
+All put together, the final container contains exactly one file: the web server
+binary. It can be executed by an user. There is _nothing_ else in the
+container.
 
 ## What does this prevent?
 
-Limiting network like this is extremely effective. Here are a few things you 
-can't do anymore
-
-**SSRF Can't reach anything anymore**
-
-If you try to exploit the SSRF endpoint now you'll notice that everything times out.
+The RCE exploit is now significantly less of a threat. While it exists, there
+aren't any programs other than the web server to run!
 
 ```
-$ curl http://localhost/ssrf/?uri=http://google.com
-Get http://google.com: dial tcp 172.217.14.206:80: i/o timeout
+$ curl http://localhost/rce/?cmd=ls
+exec: "ls": executable file not found in $PATH
+
+$ curl http://localhost/rce/?cmd=/road-to-secure-kubernetes
+listen tcp :8080: bind: address already in use
 ```
 
-In a production scenario this might prevent a leak of cloud credentials (the
-Capitol One break was SSRF against cloud metadata endpoint), request forgery to
-an unintended microservice, privilege escalation inside Kubernetes (the
-Kubernetes API is just an HTTP call away from every pod).
+While creating a statically linked binary with zero dependencies isn't possible
+for all programming languages, its certainly possible remove a lot from most
+containers. From best to worst here are the image bases you should be using for
+containers:
 
-**Its difficult to start another server in the web container now**
-
-A naive attacker might install SSH and run an SSH server in our web container
-to access the pod. There is only 1 port accessible on the pod and that is 8080,
-but its already in use by the web server. If you kill the web server the pod
-crashes so its now impossible to add new network listeners to the pod and
-connect to them.
-
-**Its difficult to create a reverse shell now**
-
-A more sophisticated attacker might try to open a reverse shell in the web
-container. In this scenerio the server is hosted elsewhere and the reverse
-shell connects to it as a client. This uses the ephemeral port range and
-connects out bound. But now the only outbound connections allowed are to Redis
-and CoreDNS.
-
-In a realistic workload it can take some time and research to make a proper
-network policy for all microservices in a system. Its easy, for instance, to
-forget the DNS looks need to be allowed. Once the work is done though, the
-benefits are clear. Minimal networking makes attacks a _lot_ more difficult.
+- `scratch` absolutely empty. Gold star for you.
+- [`distroless`](https://github.com/GoogleContainerTools/distroless) minimal
+  containers _without_ the operating system. Supports Java, Python, NodeJS and
+other popular languages. These images are signed by
+[cosign](https://github.com/sigstore/cosign), which is also an awesome way to
+protect your supply chain.
+- `busybox` If you absolutely _need_ a shell or other simple CLI tools this is
+  the image to use. Thankfully no really bad things like a package manager in
+this one.
+- `alpine` Minimal linux. Unfortunately this one has a full blown package
+  manager. Convenient for making a container but also convenient for exploiting
+one.
+- `ubuntu / fedora / debian` Absolute worse case scenario. These have a full
+  package manager and come bloated with all kinds of tools that help an
+attacker.
