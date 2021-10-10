@@ -18,6 +18,9 @@ spec:
         image: redis:latest
         securityContext:
           readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         args:
         - "/usr/local/bin/redis-server"
         - "--appendonly"

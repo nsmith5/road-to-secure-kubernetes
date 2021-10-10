@@ -21,6 +21,9 @@ spec:
         image: nsmith5/road-to-secure-kubernetes:5
         securityContext:
           readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         env:
         - name: REDIS_ADDR
           value: redis:6379
