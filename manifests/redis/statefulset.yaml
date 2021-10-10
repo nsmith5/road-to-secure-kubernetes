@@ -26,6 +26,13 @@ spec:
         - "$(REDIS_PASSWD)"
         ports:
         - containerPort: 6379
+        resources:
+          requests:
+            memory: 100Mi
+            cpu: 200m
+          limits:
+            memory: 512Mi
+            cpu: 500m
         env:
         - name: REDIS_PASSWD
           valueFrom:

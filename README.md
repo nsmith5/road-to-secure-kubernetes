@@ -1,72 +1,77 @@
 # Road to Secure Kubernetes
 _Hardening a containerized application one step at a time_
 
-Welcome to 5.0! In this step we've hardened the web container by removing
-almost _everything_ from it.
+Welcome to 6.0! We're starting get into marginal gains here, but we've still
+got some actions we can take. This time we've set resource limits and requests
+to limit our disruptive our service can be to other services under a denial of
+service attack.
 
 ## What has changed?
 
-We've modified the Dockerfile for our web server significantly.
+We've added resource requests and limits to Redis and the web server
 
-```Dockerfile
-FROM golang:1.16 as build
-WORKDIR /build
-COPY . .
-RUN go get
-RUN CGO_ENABLED=0 go build
-RUN chgrp 0 road-to-secure-kubernetes && chmod g+X road-to-secure-kubernetes
-
-FROM scratch
-COPY --from=build /build/road-to-secure-kubernetes .
-USER 5678
-ENTRYPOINT ["/road-to-secure-kubernetes"]
+```diff
+diff --git a/manifests/redis/statefulset.yaml b/manifests/redis/statefulset.yaml
+index fb7f22d..a0780df 100644
+--- a/manifests/redis/statefulset.yaml
++++ b/manifests/redis/statefulset.yaml
+@@ -26,6 +26,13 @@ spec:
+         - "$(REDIS_PASSWD)"
+         ports:
+         - containerPort: 6379
++        resources:
++          requests:
++            memory: 100Mi
++            cpu: 200m
++          limits:
++            memory: 512Mi
++            cpu: 500m
+         env:
+         - name: REDIS_PASSWD
+           valueFrom:
+diff --git a/manifests/web/deployment.yaml b/manifests/web/deployment.yaml
+index 0e8f31a..120bc7c 100644
+--- a/manifests/web/deployment.yaml
++++ b/manifests/web/deployment.yaml
+@@ -31,4 +31,11 @@ spec:
+               key: password
+         ports:
+         - containerPort: 8080
++        resources:
++          requests:
++            memory: 20Mi
++            cpu: 100m
++          limits:
++            memory: 100Mi
++            cpu: 300m
 ```
 
-Lets highlight a few things:
+This is generally considered best practice in Kubernetes, but its not always
+highlighted as a security advantage. We'll talk about what this helps prevent
+in a second, but first lets talk briefly about how to set these variables.
 
-- `FROM golang:1.16 as build` shows we're using a multistage build. The first
-stage is simply used to build the binary and the second stage is how the final
-container is constructed. The binary is copied from the first stage into the second
-- `CGO_ENABLED=0 go build` By turning off CGO, the resulting binary is completely
-statically linked with zero dependency on glibc etc.
-- `RUN chgrp 0` and `chmod g+X` has the same affect as before: The binary can now
-be executed by any user ID.
-- `FROM scratch` this final container starts as _completely_ empty
-
-All put together, the final container contains exactly one file: the web server
-binary. It can be executed by an user. There is _nothing_ else in the
-container.
+We can set the requests and limits of CPU and memory. The requests are what
+your pod is _guaranteed_ to get and limits are what your pod cannot exceed.
 
 ## What does this prevent?
 
-The RCE exploit is now significantly less of a threat. While it exists, there
-aren't any programs other than the web server to run!
+First of all, by setting requests we've made it less likely that the Kubernetes
+scheduler will rescheduler or pod under resource contention. Kubernetes kills
+pods that use less resources than their requests _last_. It kills pods using
+more than their requests first. If you've no requests than you're always in
+excess of your requests (Kubernetes treats no requests like requesting zero) so
+this is the worst position to be in. This improves availability and that is
+one part of the security triangle.
 
-```
-$ curl http://localhost/rce/?cmd=ls
-exec: "ls": executable file not found in $PATH
+Setting limits on resources limits the damage your service can do to other
+services under a denial of service attack. This doesn't stop a denial of
+service attack by any means, but it can contain the damage to a single service
+in some cases. Without limits, the pod can use CPU or memory until it saturates
+the nodes available resources and Kubernetes starts to throttle or kill pods.
+In the best case this simply kills the pod that is using all these resources,
+but in the worst case it might kill a pod from a different service that forgot
+to set requests.
 
-$ curl http://localhost/rce/?cmd=/road-to-secure-kubernetes
-listen tcp :8080: bind: address already in use
-```
-
-While creating a statically linked binary with zero dependencies isn't possible
-for all programming languages, its certainly possible remove a lot from most
-containers. From best to worst here are the image bases you should be using for
-containers:
-
-- `scratch` absolutely empty. Gold star for you.
-- [`distroless`](https://github.com/GoogleContainerTools/distroless) minimal
-  containers _without_ the operating system. Supports Java, Python, NodeJS and
-other popular languages. These images are signed by
-[cosign](https://github.com/sigstore/cosign), which is also an awesome way to
-protect your supply chain.
-- `busybox` If you absolutely _need_ a shell or other simple CLI tools this is
-  the image to use. Thankfully no really bad things like a package manager in
-this one.
-- `alpine` Minimal linux. Unfortunately this one has a full blown package
-  manager. Convenient for making a container but also convenient for exploiting
-one.
-- `ubuntu / fedora / debian` Absolute worse case scenario. These have a full
-  package manager and come bloated with all kinds of tools that help an
-attacker.
+Circuit breaking and rate limiting are much better approaches to limit the
+threat of DOS attacks, but this is all we can do with the Dockerfile and
+Kubernetes manifests alone.
