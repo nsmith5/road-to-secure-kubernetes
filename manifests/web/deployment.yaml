@@ -21,6 +21,7 @@ spec:
         image: nsmith5/road-to-secure-kubernetes:5
         securityContext:
           readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
           capabilities:
             drop:
             - ALL
