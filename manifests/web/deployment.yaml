@@ -16,6 +16,9 @@ spec:
         runAsGroup: 4444
         runAsUser: 1234
         runAsNonRoot: true
+        seccompProfile:
+          type: Localhost
+          localhostProfile: profiles/fine-grain.json
       containers:
       - name: road-to-secure-kubernetes
         image: nsmith5/road-to-secure-kubernetes:5
