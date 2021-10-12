@@ -1,62 +1,79 @@
 # Road to Secure Kubernetes
 _Hardening a containerized application one step at a time_
 
-Welcome to 10.0! We've dropped service account credentials
-from the container.
- 
-## What has changed?
+This repository hosts a tutorial on security hardening a containerized workload
+in Kubernetes. Its a self-guided, hands on guide from the "default" settings we
+see in Kubernetes to a relatively well configured workload. The mitigations
+described are by no means exhaustive but show a lot of low hanging fruit anyone
+can take advantage of to harden a workload.
 
-By default, all pods have the credentials of their service account mounted
-at `/var/run/secrets/kubernetes.io/serviceaccount`. We've removed these
-credentials from Redis and the web server.
+## Prerequistes
 
-```diff
-diff --git a/manifests/redis/statefulset.yaml b/manifests/redis/statefulset.yaml
-index 2346dfc..827fb4a 100644
---- a/manifests/redis/statefulset.yaml
-+++ b/manifests/redis/statefulset.yaml
-@@ -13,6 +13,7 @@ spec:
-       labels:
-         app: redis
-     spec:
-+      automountServiceAccountToken: false
-       containers:
-       - name: redis
-         image: redis:latest
-diff --git a/manifests/web/deployment.yaml b/manifests/web/deployment.yaml
-index 417e673..d1bb321 100644
---- a/manifests/web/deployment.yaml
-+++ b/manifests/web/deployment.yaml
-@@ -12,6 +12,7 @@ spec:
-       labels:
-         app: road-to-secure-kubernetes
-     spec:
-+      automountServiceAccountToken: false
-       securityContext:
-         runAsGroup: 4444
-         runAsUser: 1234
-```
+To run through the tutorial you'll need
 
-Previously the following was possible, for instance:
+- [Docker](https://docker.io)
+- [`kind`](https://kind.sigs.k8s.io/) to run a Kubernetes cluster on your laptop with Docker
+- `kubectl` the Kubernetes CLI to interact with the cluster
+- `helm` to install [Cilium](https://cilium.io/) in our cluster
+
+Before you begin, install the `kind` cluster as follows:
 
 ```
-$ kubectl exec redis-0 -- ls /var/run/secrets/kubernetes.io/seviceaccount/
-ca.crt
-namespace
-token
+$ cd cluster
+
+# Install kind cluster
+$ kind create cluster --config config.yaml
+
+# Install Cilium into kind cluster
+$ helm repo add cilium https://helm.cilium.io/
+$ helm install cilium cilium/cilium --version 1.9.10 \
+   --namespace kube-system \
+   --set nodeinit.enabled=true \
+   --set kubeProxyReplacement=partial \
+   --set hostServices.enabled=false \
+   --set externalIPs.enabled=true \
+   --set nodePort.enabled=true \
+   --set hostPort.enabled=true \
+   --set bpf.masquerade=false \
+   --set image.pullPolicy=IfNotPresent \
+   --set ipam.mode=kubernetes
+
+# Install Nginx Ingress controller
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
 ```
 
-and now, this directory doesn't exist.
+Once you can run `curl http://localhost` and get back a 404 like this one from Nginx, you're ready
+to start
 
-## What does this prevent?
+```html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+```
 
-These service account credentials allow applications to talk the Kubernetes
-API. Applications like the Nginx ingress controller we're running in our
-cluster need these to function, but our application doesn't use the Kubernetes
-API at all.
+## How-to
 
-While the default service account doesn't have many privileges someone might
-accidentally bind privileges to this service account. This becomes a pathway to
-privilege escalation in Kubernetes and in the worst case scenario an exploit
-can run arbitrary workloads in your cluster. Its best to remove these
-credentials all together if your workload doesn't leverage the Kubernetes API.
+The tutorial shows the step by step progression of an application configuration. Each configuration or step
+has a corresponding git tag from `1` to `10`. Start at `1` and move from tag to tag. For every change there
+is a detailed explaination of whats been changed and what the change mitigates.
+
+- [Step 1](https://github.com/nsmith5/road-to-secure-kubernetes/tree/1) is our
+  starting point. If I was to hazard a guess, about 95% of Kubernetes
+application are deployed in this state. Its a functioning application with some
+vulnerabilities as you'll see.
+- [Step 2](https://github.com/nsmith5/road-to-secure-kubernetes/tree/2) uses a non-root user in the container
+- [Step 3](https://github.com/nsmith5/road-to-secure-kubernetes/tree/3) leverages read-only filesystems
+- [Step 4](https://github.com/nsmith5/road-to-secure-kubernetes/tree/4) adds network policies
+- [Step 5](https://github.com/nsmith5/road-to-secure-kubernetes/tree/5) uses a `scratch` container
+- [Step 6](https://github.com/nsmith5/road-to-secure-kubernetes/tree/6) adds resource requests and limits
+- [Step 7](https://github.com/nsmith5/road-to-secure-kubernetes/tree/7) drops linux capabilities
+- [Step 8](https://github.com/nsmith5/road-to-secure-kubernetes/tree/8) disables privilege escalation
+- [Step 9](https://github.com/nsmith5/road-to-secure-kubernetes/tree/9) adds seccomp profile
+- [Step 10](https://github.com/nsmith5/road-to-secure-kubernetes/tree/10) removes service account credentials
+
+Navigate to each tag to learn more!
