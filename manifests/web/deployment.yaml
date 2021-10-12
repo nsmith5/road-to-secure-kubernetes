@@ -12,6 +12,7 @@ spec:
       labels:
         app: road-to-secure-kubernetes
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsGroup: 4444
         runAsUser: 1234
