@@ -18,7 +18,7 @@ To run through the tutorial you'll need
 
 Before you begin, install the `kind` cluster as follows:
 
-```
+```bash
 $ cd cluster
 
 # Install kind cluster
@@ -38,8 +38,12 @@ $ helm install cilium cilium/cilium --version 1.9.10 \
    --set image.pullPolicy=IfNotPresent \
    --set ipam.mode=kubernetes
 
+# Wait to be installed
+$ kubectl wait --for=condition=available deployment.apps/cilium-operator -n kube-system
+
 # Install Nginx Ingress controller
 $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+$ kubectl wait --for=condition=available deployment.apps/ingress-nginx-controller -n ingress-nginx
 
 ```
 
