@@ -7,6 +7,11 @@ see in Kubernetes to a relatively well configured workload. The mitigations
 described are by no means exhaustive but show a lot of low hanging fruit anyone
 can take advantage of to harden a workload.
 
+## Video Walk-through
+
+I recorded a walk-through of this entire tutorial for folks that want a 
+video guide: https://www.youtube.com/watch?v=fe_6UZG8Hlo
+
 ## Prerequistes
 
 To run through the tutorial you'll need
